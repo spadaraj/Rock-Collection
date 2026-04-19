@@ -73,12 +73,13 @@ function resizeImage(file) {
 }
 
 // ===== CLAUDE API =====
-async function identifyRock(dataUrl, mediaType) {
+async function identifyRock(dataUrl, mediaType, knownName) {
   var key = getApiKey();
   if (!key) { navigate('setup'); throw new Error('No API key set.'); }
 
   var base64 = dataUrl.split(',')[1];
-  var prompt = 'You are a friendly geologist helping a child identify rocks. Analyze this photo and respond ONLY with valid JSON in this exact format (no extra text):\n{"name":"Rock Name","type":"igneous","rarity":"common","composition":"Simple plain-language description of what minerals are in it","funFact":"One amazing kid-friendly sentence about this rock","confidence":"high"}\n\nRules:\n- type must be exactly one of: igneous, sedimentary, metamorphic, gemstone, mineral, unknown\n- rarity must be exactly one of: common, uncommon, rare, very rare\n- confidence must be exactly one of: high, medium, low\n- Use "unknown" and confidence "low" if you cannot identify it\n- Keep composition and funFact short and easy for a child to understand\n- Respond with ONLY the JSON object, nothing else';
+  var nameHint = knownName ? ' This rock is called "' + knownName + '".' : '';
+  var prompt = 'You are a friendly geologist helping a child identify rocks.' + nameHint + ' Analyze this photo and respond ONLY with valid JSON in this exact format (no extra text):\n{"name":"Rock Name","type":"igneous","rarity":"common","composition":"Simple plain-language description of minerals","funFact":"One amazing kid-friendly sentence","confidence":"high","hardness":7,"lustre":"glassy","streak":"white","cleavage":"poor","transparency":"opaque"}\n\nRules:\n- type: igneous, sedimentary, metamorphic, gemstone, mineral, or unknown\n- rarity: common, uncommon, rare, or very rare\n- confidence: high, medium, or low\n- hardness: Mohs hardness as a number 1-10 (use decimals like 6.5 if between values)\n- lustre: metallic, glassy, waxy, pearly, silky, resinous, dull, or adamantine\n- streak: the color left when scratched on a surface (e.g. white, black, red-brown, yellow)\n- cleavage: perfect, good, poor, none, or conchoidal\n- transparency: opaque, translucent, or transparent\n- Keep composition and funFact short and easy for a child to understand\n- Respond with ONLY the JSON object, nothing else';
 
   var res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -449,10 +450,15 @@ function confirmAdd() {
   var entry = {
     id:           uid(),
     name:         name,
-    type:         rock.type    || 'unknown',
-    rarity:       (rock.rarity || 'common'),
-    composition:  rock.composition || '',
-    funFact:      rock.funFact || '',
+    type:         rock.type         || 'unknown',
+    rarity:       rock.rarity       || 'common',
+    composition:  rock.composition  || '',
+    funFact:      rock.funFact      || '',
+    hardness:     rock.hardness     || null,
+    lustre:       rock.lustre       || '',
+    streak:       rock.streak       || '',
+    cleavage:     rock.cleavage     || '',
+    transparency: rock.transparency || '',
     photoDataUrl: APP.pendingPhoto ? APP.pendingPhoto.dataUrl : '',
     location:     locEl ? locEl.value.trim() : '',
     dateAdded:    new Date().toISOString().slice(0, 10),
@@ -575,37 +581,185 @@ function refreshGrid() {
   });
 }
 
+// ===== REPORT CARD =====
+var RARITY_THEMES = {
+  'common':    { color: '#7F8C8D', grad: 'linear-gradient(135deg,#95A5A6,#7F8C8D)', stars: '⭐',         label: 'Common'    },
+  'uncommon':  { color: '#219A52', grad: 'linear-gradient(135deg,#2ECC71,#219A52)', stars: '⭐⭐',       label: 'Uncommon'  },
+  'rare':      { color: '#2471A3', grad: 'linear-gradient(135deg,#3498DB,#2471A3)', stars: '⭐⭐⭐',     label: 'Rare!'     },
+  'very rare': { color: '#D4AC0D', grad: 'linear-gradient(135deg,#F4D03F,#D4AC0D)', stars: '⭐⭐⭐⭐',   label: 'VERY RARE!'},
+};
+
 function showRockDetail(rockId) {
   var rock = getCollection().find(function(r) { return r.id === rockId; });
   if (!rock) return;
 
+  var rarity = (rock.rarity || 'common').replace('-', ' ');
+  var theme  = RARITY_THEMES[rarity] || RARITY_THEMES['common'];
+  var hasDetailedStats = rock.hardness || rock.lustre || rock.streak;
+
+  // Hardness pips
+  var hardnessHtml = '';
+  if (rock.hardness) {
+    var pips = '';
+    for (var i = 1; i <= 10; i++) {
+      pips += '<div class="rc-pip' + (i <= Math.round(rock.hardness) ? ' filled' : '') + '"></div>';
+    }
+    hardnessHtml =
+      '<div class="rc-stat-row">' +
+        '<span class="rc-stat-icon">💪</span>' +
+        '<span class="rc-stat-label">Hardness</span>' +
+        '<div class="rc-stat-right">' +
+          '<div class="rc-pips">' + pips + '</div>' +
+          '<span class="rc-pip-num">' + rock.hardness + '/10</span>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Simple stat row helper
+  function statRow(icon, label, value) {
+    if (!value) return '';
+    return '<div class="rc-stat-row">' +
+      '<span class="rc-stat-icon">' + icon + '</span>' +
+      '<span class="rc-stat-label">' + label + '</span>' +
+      '<span class="rc-stat-val">' + esc(value) + '</span>' +
+    '</div>';
+  }
+
   var overlay = document.createElement('div');
-  overlay.className = 'detail-overlay';
+  overlay.className = 'rc-overlay';
   overlay.innerHTML =
-    '<div class="detail-sheet" id="detail-sheet">' +
-      '<div class="sheet-handle"></div>' +
-      (rock.photoDataUrl ? '<img class="detail-photo" src="' + rock.photoDataUrl + '" alt="' + esc(rock.name) + '">' : '') +
-      '<div class="detail-name">' + esc(rock.name) + '</div>' +
-      '<div class="detail-badges">' +
-        '<span class="badge badge-' + (rock.type||'unknown') + '">' + typeEmoji(rock.type) + ' ' + esc(rock.type||'unknown') + '</span>' +
-        '<span class="badge badge-' + rarityClass(rock.rarity) + '">' + rarityEmoji(rock.rarity) + ' ' + esc((rock.rarity||'common').replace('-',' ')) + '</span>' +
+    '<div class="rc-card" id="rc-card">' +
+
+      // Photo
+      '<div class="rc-photo-wrap">' +
+        (rock.photoDataUrl
+          ? '<img class="rc-photo" src="' + rock.photoDataUrl + '" alt="' + esc(rock.name) + '">'
+          : '<div class="rc-photo-placeholder">🪨</div>') +
+        '<div class="rc-ribbon" style="background:' + theme.color + '">' + theme.label + '</div>' +
       '</div>' +
-      (rock.composition ? '<div class="detail-meta">🧪 ' + esc(rock.composition) + '</div>' : '') +
-      (rock.location    ? '<div class="detail-meta">📍 Found at: ' + esc(rock.location) + '</div>' : '') +
-      (rock.dateAdded   ? '<div class="detail-meta">📅 Added: ' + fmtDate(rock.dateAdded) + '</div>' : '') +
-      (rock.funFact     ? '<div class="detail-fact">' + esc(rock.funFact) + '</div>' : '') +
-      '<button class="btn btn-danger mt-16" id="del-btn">🗑 Remove from Collection</button>' +
+
+      // Name banner
+      '<div class="rc-banner" style="background:' + theme.grad + '">' +
+        '<div class="rc-name">' + esc(rock.name) + '</div>' +
+        '<div class="rc-type-row">' +
+          '<span class="rc-type-badge">' + typeEmoji(rock.type) + ' ' + esc(rock.type || 'unknown') + '</span>' +
+          '<span class="rc-stars">' + theme.stars + '</span>' +
+        '</div>' +
+      '</div>' +
+
+      // Stats
+      '<div class="rc-body">' +
+
+        // Detailed stats or re-analyze prompt
+        (hasDetailedStats
+          ? '<div class="rc-section">' +
+              hardnessHtml +
+              statRow('✨', 'Lustre',       rock.lustre) +
+              statRow('🎨', 'Streak',       rock.streak) +
+              statRow('💔', 'Cleavage',     rock.cleavage) +
+              statRow('👁', 'Transparency', rock.transparency) +
+            '</div>'
+          : '<div class="rc-reanalyze-wrap">' +
+              '<button class="rc-reanalyze-btn" id="reanalyze-btn">🔬 Get Full Stats</button>' +
+              '<p class="rc-reanalyze-hint">Tap to analyze this rock\'s detailed properties</p>' +
+            '</div>'
+        ) +
+
+        // Composition
+        (rock.composition
+          ? '<div class="rc-section"><div class="rc-composition"><span class="rc-comp-label">🧪 Made of</span> ' + esc(rock.composition) + '</div></div>'
+          : '') +
+
+        // Fun fact
+        (rock.funFact
+          ? '<div class="rc-section"><div class="rc-fact"><span class="rc-fact-label">💡 Fun Fact</span>' + esc(rock.funFact) + '</div></div>'
+          : '') +
+
+        // Meta
+        '<div class="rc-meta">' +
+          (rock.location  ? '<span>📍 ' + esc(rock.location)   + '</span>' : '') +
+          (rock.dateAdded ? '<span>📅 ' + fmtDate(rock.dateAdded) + '</span>' : '') +
+        '</div>' +
+
+        // Action buttons
+        '<div class="rc-actions">' +
+          '<button class="rc-btn-share" id="rc-share">📤 Share</button>' +
+          '<button class="rc-btn-close" id="rc-close">✕ Close</button>' +
+        '</div>' +
+        '<button class="rc-btn-delete" id="rc-delete">🗑 Remove from Collection</button>' +
+
+      '</div>' +
     '</div>';
 
   document.body.appendChild(overlay);
 
+  // Close
   overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
-  document.getElementById('del-btn').addEventListener('click', function() {
+  document.getElementById('rc-close').addEventListener('click', function() { overlay.remove(); });
+
+  // Share
+  document.getElementById('rc-share').addEventListener('click', function() { shareCard(rock); });
+
+  // Delete
+  document.getElementById('rc-delete').addEventListener('click', function() {
     if (!confirm('Remove "' + rock.name + '" from your collection?')) return;
     saveCollection(getCollection().filter(function(r) { return r.id !== rockId; }));
     overlay.remove();
     refreshGrid();
   });
+
+  // Re-analyze for detailed stats
+  var reBtn = document.getElementById('reanalyze-btn');
+  if (reBtn) {
+    reBtn.addEventListener('click', function() { refreshRockStats(rockId, overlay); });
+  }
+}
+
+async function refreshRockStats(rockId, overlay) {
+  var rock = getCollection().find(function(r) { return r.id === rockId; });
+  if (!rock || !rock.photoDataUrl) { alert('No photo available to re-analyze.'); return; }
+
+  var btn = document.getElementById('reanalyze-btn');
+  if (btn) { btn.textContent = '🔬 Analyzing...'; btn.disabled = true; }
+
+  try {
+    var result = await identifyRock(rock.photoDataUrl, 'image/jpeg', rock.name);
+    var coll = getCollection();
+    var idx  = coll.findIndex(function(r) { return r.id === rockId; });
+    if (idx >= 0) {
+      coll[idx].hardness     = result.hardness     || coll[idx].hardness;
+      coll[idx].lustre       = result.lustre        || coll[idx].lustre;
+      coll[idx].streak       = result.streak        || coll[idx].streak;
+      coll[idx].cleavage     = result.cleavage      || coll[idx].cleavage;
+      coll[idx].transparency = result.transparency  || coll[idx].transparency;
+      coll[idx].composition  = result.composition   || coll[idx].composition;
+      coll[idx].funFact      = result.funFact       || coll[idx].funFact;
+      saveCollection(coll);
+    }
+    if (overlay) overlay.remove();
+    showRockDetail(rockId);
+  } catch (err) {
+    if (btn) { btn.textContent = '🔬 Get Full Stats'; btn.disabled = false; }
+    alert('Could not get stats: ' + err.message);
+  }
+}
+
+function shareCard(rock) {
+  var text = '🪨 ' + rock.name + '\n' +
+    typeEmoji(rock.type) + ' ' + (rock.type || '') + '  ' +
+    rarityEmoji(rock.rarity) + ' ' + (rock.rarity || '') + '\n' +
+    (rock.funFact ? '\n💡 ' + rock.funFact : '') +
+    '\n\n— Rock Collection App';
+
+  if (navigator.share) {
+    navigator.share({ title: rock.name, text: text }).catch(function() {});
+  } else {
+    var msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#2C3E50;color:white;padding:12px 20px;border-radius:12px;font-size:14px;font-weight:600;z-index:9999;text-align:center;';
+    msg.textContent = '📸 Take a screenshot to share this card!';
+    document.body.appendChild(msg);
+    setTimeout(function() { msg.remove(); }, 3000);
+  }
 }
 
 // ===== RENDER: SETS =====
