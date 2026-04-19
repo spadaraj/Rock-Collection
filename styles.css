@@ -177,7 +177,7 @@ a { color: var(--color-primary); }
 .badge-common      { background: #F2F3F4; color: #566573; }
 .badge-uncommon    { background: #E9F7EF; color: #1A7A4A; }
 .badge-rare        { background: #EBF5FB; color: #1A5276; }
-.badge-very-rare   { background: #F5EEF8; color: #7D3C98; }
+.badge-very-rare   { background: #FEF9E7; color: #B7950B; }
 
 /* Progress bar */
 .progress-wrap {

@@ -41,10 +41,68 @@ function typeEmoji(t) {
 }
 function rarityEmoji(r) {
   var clean = (r||'common').replace('-',' ');
-  return { common:'⚪', uncommon:'🟢', rare:'🔵', 'very rare':'🟣' }[clean] || '⚪';
+  return { common:'⚪', uncommon:'🟢', rare:'🔵', 'very rare':'⭐' }[clean] || '⚪';
 }
 function rarityClass(r) {
   return (r||'common').replace(' ','-');
+}
+
+// ===== AUTHORITATIVE RARITY CLASSIFICATION =====
+var RARITY_TIERS = {
+  'very rare': [
+    'diamond','emerald','alexandrite','tanzanite','paraiba tourmaline',
+    'benitoite','painite','musgravite','grandidierite','red beryl',
+    'jeremejevite','taaffeite','serendibite','poudretteite','meteorite',
+  ],
+  'rare': [
+    'lapis lazuli','lapis','malachite','azurite','turquoise','rhodonite',
+    'garnet','sapphire','ruby','topaz','moonstone','sunstone','chrysocolla',
+    'amazonite','kyanite','andalusite','prehnite','zircon','spinel',
+    'aquamarine','peridot','jade','opal','pearl',
+  ],
+  'uncommon': [
+    'amethyst','rose quartz','smoky quartz','citrine','jasper','agate',
+    'tiger eye','tigers eye','hematite','pyrite','fools gold','fool gold',
+    'magnetite','fluorite','aventurine','sodalite','serpentine','travertine',
+    'marble','hornblende','tourmaline','labradorite','olivine','sulfur',
+    'phyllite','hornfels','soapstone','anthracite','breccia','coquina',
+  ],
+  'common': [
+    'quartz','granite','basalt','sandstone','limestone','shale','slate',
+    'obsidian','pumice','flint','chert','feldspar','mica','calcite',
+    'dolomite','gypsum','talc','chalk','conglomerate','quartzite',
+    'coal','mudstone','siltstone','scoria','tuff','gneiss','schist',
+    'gabbro','diorite','andesite','rhyolite','halite','biotite',
+    'orthoclase','plagioclase','hornblende',
+  ],
+};
+
+function classifyRarity(name) {
+  var n = norm(name);
+  var tiers = ['very rare','rare','uncommon','common'];
+  for (var t = 0; t < tiers.length; t++) {
+    var tier  = tiers[t];
+    var terms = RARITY_TIERS[tier];
+    for (var i = 0; i < terms.length; i++) {
+      if (n.includes(terms[i])) return tier;
+    }
+  }
+  return null; // not in reference list — keep Claude's classification
+}
+
+// Apply authoritative rarity to every rock in the collection (one-time migration)
+function migrateRarities() {
+  var coll = getCollection();
+  var changed = false;
+  coll = coll.map(function(r) {
+    var canonical = classifyRarity(r.name);
+    if (canonical && canonical !== r.rarity.replace('-',' ')) {
+      r.rarity = canonical;
+      changed = true;
+    }
+    return r;
+  });
+  if (changed) saveCollection(coll);
 }
 
 // ===== IMAGE RESIZE =====
@@ -384,6 +442,8 @@ async function handlePhoto(file) {
     var resized = await resizeImage(file);
     APP.pendingPhoto = resized;
     var rock = await identifyRock(resized.dataUrl, resized.mediaType);
+    var authoritative = classifyRarity(rock.name);
+    if (authoritative) rock.rarity = authoritative;
     APP.pendingRock = rock;
     showResult(resized.dataUrl, rock);
   } catch (err) {
@@ -989,6 +1049,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // Settings button
   var gear = document.getElementById('settings-btn');
   if (gear) gear.addEventListener('click', openSettings);
+
+  // Migrate existing collection to authoritative rarity tiers
+  migrateRarities();
 
   // Route
   if (!isSetupDone() || !getApiKey()) {
