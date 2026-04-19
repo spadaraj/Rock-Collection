@@ -331,7 +331,7 @@ function renderHome() {
         '<div class="section-title">Recent Finds 🆕</div>' +
         '<div class="recent-grid">' +
           recent.map(function(r) {
-            return '<div class="recent-card">' +
+            return '<div class="recent-card" data-id="' + r.id + '">' +
               (r.photoDataUrl
                 ? '<img src="' + r.photoDataUrl + '" alt="' + esc(r.name) + '" loading="lazy">'
                 : '<div class="recent-card-placeholder">🪨</div>') +
@@ -367,6 +367,9 @@ function renderHome() {
       '<button class="btn btn-ghost mt-8" id="settings-home-btn" style="font-size:14px;min-height:44px">⚙️ Change API Key</button>' +
     '</div>';
 
+  el.querySelectorAll('.recent-card[data-id]').forEach(function(card) {
+    card.addEventListener('click', function() { showRockDetail(card.dataset.id); });
+  });
   document.getElementById('import-btn').addEventListener('click', importCollection);
   document.getElementById('settings-home-btn').addEventListener('click', function() { navigate('setup'); });
 }
@@ -963,9 +966,13 @@ function showSetDetail(setId) {
       '<div class="set-rocks-grid">' +
       set.rocks.map(function(rock) {
         var found = isRockFound(set, rock);
-        return '<div class="set-rock-tile ' + (found ? 'found' : 'missing') + '">' +
+        // For found rocks, look up the collection entry so we can pass its id
+        var collEntry = found ? getCollection().find(function(c) { return norm(c.name) === norm(rock.name); }) : null;
+        var dataId = collEntry ? ' data-id="' + collEntry.id + '"' : '';
+        return '<div class="set-rock-tile ' + (found ? 'found' : 'missing') + '"' + dataId + '>' +
           '<div class="tile-icon">' + (found ? '✅' : typeEmoji(rock.type)) + '</div>' +
           '<div class="tile-name">' + esc(rock.name) + '</div>' +
+          (found ? '' : '<div class="tile-missing-label">Not found yet</div>') +
         '</div>';
       }).join('') +
       '</div>' +
@@ -973,6 +980,9 @@ function showSetDetail(setId) {
 
   document.body.appendChild(detail);
   document.getElementById('set-back').addEventListener('click', function() { detail.remove(); });
+  detail.querySelectorAll('.set-rock-tile.found[data-id]').forEach(function(tile) {
+    tile.addEventListener('click', function() { showRockDetail(tile.dataset.id); });
+  });
 }
 
 // ===== RENDER: WISHLIST =====
