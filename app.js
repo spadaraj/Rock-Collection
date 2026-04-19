@@ -252,7 +252,6 @@ function celebrate(title, subtitle, emoji) {
 // ===== RENDER: SETUP =====
 function renderSetup() {
   var el = document.getElementById('view-setup');
-  el.style.display = 'flex';
   el.innerHTML =
     '<span class="setup-rock">🪨</span>' +
     '<div class="setup-title">Rock Collection!</div>' +
