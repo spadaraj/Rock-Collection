@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#FF6B35">
+  <title>Rock Collection 🪨</title>
+  <link rel="stylesheet" href="styles.css">
+  <script>
+    /* Prevent flash of wrong state */
+    (function() {
+      var done = localStorage.getItem('rock_setup_done') === 'true';
+      var key  = localStorage.getItem('rock_api_key');
+      if (!done || !key) document.documentElement.setAttribute('data-setup', 'pending');
+    })();
+  </script>
+</head>
+<body>
+
+  <!-- ===== APP ===== -->
+  <div id="app">
+
+    <!-- Setup / Onboarding -->
+    <section id="view-setup" class="view" style="display:flex"></section>
+
+    <!-- Home / Dashboard -->
+    <section id="view-home" class="view"></section>
+
+    <!-- Add a Rock -->
+    <section id="view-add" class="view"></section>
+
+    <!-- My Collection -->
+    <section id="view-collection" class="view"></section>
+
+    <!-- Rock Sets -->
+    <section id="view-sets" class="view"></section>
+
+    <!-- Wishlist -->
+    <section id="view-wishlist" class="view"></section>
+
+  </div>
+
+  <!-- ===== BOTTOM NAV ===== -->
+  <nav id="bottom-nav">
+    <button class="nav-btn" data-view="home">
+      <span class="nav-icon">🏠</span>
+      <span class="nav-label">Home</span>
+    </button>
+    <button class="nav-btn" data-view="collection">
+      <span class="nav-icon">🪨</span>
+      <span class="nav-label">Rocks</span>
+    </button>
+    <button class="nav-btn nav-add" data-view="add" aria-label="Add a rock">+</button>
+    <button class="nav-btn" data-view="sets">
+      <span class="nav-icon">⭐</span>
+      <span class="nav-label">Sets</span>
+    </button>
+    <button class="nav-btn" data-view="wishlist">
+      <span class="nav-icon">🔍</span>
+      <span class="nav-label">Find</span>
+    </button>
+  </nav>
+
+  <!-- ===== CELEBRATION OVERLAY ===== -->
+  <div id="celebration" class="hidden" style="pointer-events:none"></div>
+
+  <!-- ===== SCRIPTS ===== -->
+  <script src="rocks-data.js"></script>
+  <script src="app.js"></script>
+
+</body>
+</html>
