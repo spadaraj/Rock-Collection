@@ -299,22 +299,26 @@ function renderHome() {
     heroHtml =
       '<div class="hero-empty">' +
         '<span class="hero-empty-icon">🪨</span>' +
-        '<div class="hero-empty-title">Start your collection!</div>' +
-        '<p class="hero-empty-sub">Tap the + button to photograph your first rock</p>' +
+        '<div class="hero-empty-title">Add your first rock! 🪨</div>' +
+        '<p class="hero-empty-sub">Tap the + button below to photograph and identify your first rock</p>' +
       '</div>';
   } else {
+    var rarityBadgeClass = 'badge ' + rarityClass(latest.rarity);
     heroHtml =
       '<div class="hero-section">' +
         (latest && latest.photoDataUrl
           ? '<img class="hero-photo" src="' + latest.photoDataUrl + '" alt="' + esc(latest.name) + '">'
           : '<div class="hero-photo-placeholder">🪨</div>') +
         '<div class="hero-overlay">' +
-          '<div class="hero-latest-label">Latest Find</div>' +
-          '<div class="hero-latest-name">' + esc(latest ? latest.name : '') + '</div>' +
+          '<div class="hero-latest-label">LATEST FIND</div>' +
+          '<div class="hero-name-row">' +
+            '<div class="hero-latest-name">' + esc(latest.name) + '</div>' +
+            '<span class="' + rarityBadgeClass + ' hero-badge">' + esc(latest.rarity) + '</span>' +
+          '</div>' +
           '<div class="hero-stats-row">' +
             '<div class="hero-stat"><span class="hero-stat-num">' + total + '</span><span class="hero-stat-lbl">Rocks 🪨</span></div>' +
             '<div class="hero-stat-sep"></div>' +
-            '<div class="hero-stat"><span class="hero-stat-num">' + setsStarted + '</span><span class="hero-stat-lbl">Sets ⭐</span></div>' +
+            '<div class="hero-stat"><span class="hero-stat-num">' + setsStarted + '</span><span class="hero-stat-lbl">Sets 📚</span></div>' +
           '</div>' +
         '</div>' +
       '</div>';
