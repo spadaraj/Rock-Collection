@@ -79,7 +79,7 @@ async function identifyRock(dataUrl, mediaType, knownName) {
 
   var base64 = dataUrl.split(',')[1];
   var nameHint = knownName ? ' This rock is called "' + knownName + '".' : '';
-  var prompt = 'You are a friendly geologist helping a child identify rocks.' + nameHint + ' Analyze this photo and respond ONLY with valid JSON in this exact format (no extra text):\n{"name":"Rock Name","type":"igneous","rarity":"common","composition":"Simple plain-language description of minerals","funFact":"One amazing kid-friendly sentence","confidence":"high","hardness":7,"lustre":"glassy","streak":"white","cleavage":"poor","transparency":"opaque"}\n\nRules:\n- type: igneous, sedimentary, metamorphic, gemstone, mineral, or unknown\n- rarity: common, uncommon, rare, or very rare\n- confidence: high, medium, or low\n- hardness: Mohs hardness as a number 1-10 (use decimals like 6.5 if between values)\n- lustre: metallic, glassy, waxy, pearly, silky, resinous, dull, or adamantine\n- streak: the color left when scratched on a surface (e.g. white, black, red-brown, yellow)\n- cleavage: perfect, good, poor, none, or conchoidal\n- transparency: opaque, translucent, or transparent\n- Keep composition and funFact short and easy for a child to understand\n- Respond with ONLY the JSON object, nothing else';
+  var prompt = 'You are a friendly geologist helping a child identify rocks.' + nameHint + ' Analyze this photo and respond ONLY with valid JSON in this exact format (no extra text):\n{"name":"Rock Name","type":"igneous","rarity":"common","composition":"Simple plain-language description of minerals","funFact":"One amazing kid-friendly sentence","confidence":"high","confidencePct":92,"alternatives":[],"hardness":7,"lustre":"glassy","streak":"white","cleavage":"poor","transparency":"opaque"}\n\nRules:\n- type: igneous, sedimentary, metamorphic, gemstone, mineral, or unknown\n- rarity: common, uncommon, rare, or very rare\n- confidence: high, medium, or low\n- confidencePct: integer 0-100 representing how certain you are about the identification\n- alternatives: array of 2-3 alternative rock name strings — include when confidencePct < 80, empty array otherwise\n- hardness: Mohs hardness as a number 1-10 (use decimals like 6.5 if between values)\n- lustre: metallic, glassy, waxy, pearly, silky, resinous, dull, or adamantine\n- streak: the color left when scratched on a surface (e.g. white, black, red-brown, yellow)\n- cleavage: perfect, good, poor, none, or conchoidal\n- transparency: opaque, translucent, or transparent\n- Keep composition and funFact short and easy for a child to understand\n- Respond with ONLY the JSON object, nothing else';
 
   var res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -91,7 +91,7 @@ async function identifyRock(dataUrl, mediaType, knownName) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 400,
+      max_tokens: 560,
       messages: [{
         role: 'user',
         content: [
@@ -403,41 +403,115 @@ async function handlePhoto(file) {
   }
 }
 
+// ===== CONFIDENCE HELPERS =====
+var CONF_LEVELS = {
+  high:   { min: 80,  color: '#219A52', bg: '#E9F7EF', emoji: '🎉', label: 'Pretty sure!',     barClass: 'conf-high'   },
+  medium: { min: 50,  color: '#D68910', bg: '#FEF9E7', emoji: '🤔', label: 'Good guess!',       barClass: 'conf-medium' },
+  low:    { min: 0,   color: '#CB4335', bg: '#FDEDEC', emoji: '🔍', label: 'Hmm, tricky one!',  barClass: 'conf-low'    },
+};
+
+function confLevel(pct) {
+  if (pct >= 80) return CONF_LEVELS.high;
+  if (pct >= 50) return CONF_LEVELS.medium;
+  return CONF_LEVELS.low;
+}
+
+function confMessage(pct, name) {
+  if (pct >= 80) return 'I\'m ' + pct + '% sure this is ' + name + '! Let\'s add it! 🪨';
+  if (pct >= 50) return 'I think this looks like ' + name + '... but I\'m not totally sure. Does that look right to you?';
+  return 'This one\'s a mystery! 🔍 Here are my best guesses — pick the one that looks right, or try a clearer photo with better lighting!';
+}
+
+// ===== SHOW RESULT =====
 function showResult(photoDataUrl, rock) {
   var body = document.getElementById('add-body');
   if (!body) return;
 
-  var isLow = rock.confidence === 'low';
-  var rc = rarityClass(rock.rarity);
+  var pct   = typeof rock.confidencePct === 'number' ? rock.confidencePct : (rock.confidence === 'high' ? 90 : rock.confidence === 'medium' ? 65 : 35);
+  var level = confLevel(pct);
+  var alts  = Array.isArray(rock.alternatives) ? rock.alternatives.filter(function(a) { return a && a !== rock.name; }) : [];
+  var rc    = rarityClass(rock.rarity);
 
-  var html = '';
-  if (isLow) {
-    html += '<div class="low-conf-banner">🤔 We think this is <strong>' + esc(rock.name) + '</strong> — does that look right? You can change the name below.</div>';
+  // Confidence meter block
+  var meterHtml =
+    '<div class="conf-block" style="background:' + level.bg + ';border-color:' + level.color + '">' +
+      '<div class="conf-top">' +
+        '<div class="conf-emoji-label">' +
+          '<span class="conf-emoji">' + level.emoji + '</span>' +
+          '<span class="conf-label" style="color:' + level.color + '">' + level.label + '</span>' +
+        '</div>' +
+        '<span class="conf-pct" style="color:' + level.color + '">' + pct + '%</span>' +
+      '</div>' +
+      '<div class="conf-bar-wrap">' +
+        '<div class="conf-bar-fill ' + level.barClass + '" style="width:' + pct + '%;background:' + level.color + '"></div>' +
+      '</div>' +
+      '<p class="conf-msg">' + esc(confMessage(pct, rock.name)) + '</p>' +
+    '</div>';
+
+  // Alternative picker (medium + low only)
+  var altsHtml = '';
+  if (alts.length > 0) {
+    var allOptions = [rock.name].concat(alts);
+    altsHtml =
+      '<div class="conf-alts">' +
+        '<div class="conf-alts-label">' + (pct < 50 ? 'My best guesses:' : 'Or is it one of these?') + '</div>' +
+        '<div class="conf-alts-row">' +
+          allOptions.map(function(name, i) {
+            return '<button class="conf-alt-btn' + (i === 0 ? ' selected' : '') + '" data-name="' + esc(name) + '">' + esc(name) + '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>';
   }
-  html +=
+
+  // Low confidence: also show "try again" hint above the form
+  var retakeHintHtml = pct < 50
+    ? '<button class="btn btn-ghost mb-16" id="retake-hint-btn">📸 Try a Clearer Photo</button>'
+    : '';
+
+  // Result card (always shown so user can see the photo + details)
+  var resultCardHtml =
     '<div class="result-card">' +
       '<img class="result-photo" src="' + photoDataUrl + '" alt="Your rock">' +
       '<div class="result-body">' +
-        '<div class="result-name">' + esc(rock.name) + '</div>' +
+        '<div class="result-name" id="result-name-display">' + esc(rock.name) + '</div>' +
         '<div class="result-badges">' +
           '<span class="badge badge-' + (rock.type||'unknown') + '">' + typeEmoji(rock.type) + ' ' + esc(rock.type||'unknown') + '</span>' +
           '<span class="badge badge-' + rc + '">' + rarityEmoji(rock.rarity) + ' ' + esc((rock.rarity||'common').replace('-',' ')) + '</span>' +
         '</div>' +
-        '<div class="result-composition">' + esc(rock.composition) + '</div>' +
-        '<div class="result-fact">' + esc(rock.funFact) + '</div>' +
+        (rock.composition ? '<div class="result-composition">' + esc(rock.composition) + '</div>' : '') +
+        (rock.funFact     ? '<div class="result-fact">'        + esc(rock.funFact)      + '</div>' : '') +
       '</div>' +
-    '</div>' +
+    '</div>';
+
+  body.innerHTML =
+    meterHtml +
+    altsHtml +
+    resultCardHtml +
     '<div class="add-form">' +
+      retakeHintHtml +
       '<div class="field"><label>Rock Name</label><input type="text" id="rock-name" value="' + esc(rock.name) + '" placeholder="Rock name"></div>' +
       '<div class="field"><label>Where did you find it? (optional)</label><input type="text" id="rock-location" placeholder="e.g. Backyard, beach, park..."></div>' +
       '<button class="btn btn-primary" id="confirm-btn">Add to My Collection! 🎉</button>' +
       '<button class="btn btn-ghost mt-16" id="retake-btn">📸 Take Another Photo</button>' +
     '</div>';
 
-  body.innerHTML = html;
+  // Alt picker: tap to switch name
+  body.querySelectorAll('.conf-alt-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      body.querySelectorAll('.conf-alt-btn').forEach(function(b) { b.classList.remove('selected'); });
+      btn.classList.add('selected');
+      var chosen = btn.dataset.name;
+      var nameInput = document.getElementById('rock-name');
+      if (nameInput) nameInput.value = chosen;
+      var nameDisplay = document.getElementById('result-name-display');
+      if (nameDisplay) nameDisplay.textContent = chosen;
+    });
+  });
 
   document.getElementById('confirm-btn').addEventListener('click', confirmAdd);
   document.getElementById('retake-btn').addEventListener('click', function() { renderAdd(); });
+  var retakeHint = document.getElementById('retake-hint-btn');
+  if (retakeHint) retakeHint.addEventListener('click', function() { renderAdd(); });
 }
 
 function confirmAdd() {

@@ -494,15 +494,86 @@ a { color: var(--color-primary); }
 }
 .result-fact::before { content: "💡 Fun Fact: "; font-weight: 700; }
 
-.low-conf-banner {
-  background: #FEF9E7;
-  border: 2px solid #F4D03F;
-  border-radius: var(--radius-sm);
-  padding: 12px 16px;
-  font-size: 14px;
-  margin: 0 20px 12px;
-  line-height: 1.5;
+/* ===== CONFIDENCE METER ===== */
+.conf-block {
+  margin: 0 20px 16px;
+  border: 2px solid;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  animation: fade-in 0.3s ease;
 }
+
+.conf-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.conf-emoji-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.conf-emoji { font-size: 28px; }
+.conf-label { font-size: 18px; font-weight: 900; }
+.conf-pct   { font-size: 28px; font-weight: 900; }
+
+.conf-bar-wrap {
+  background: rgba(0,0,0,0.08);
+  border-radius: 100px;
+  height: 14px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.conf-bar-fill {
+  height: 100%;
+  border-radius: 100px;
+  transition: width 0.8s cubic-bezier(0.34,1.2,0.64,1);
+  min-width: 4px;
+}
+
+.conf-msg {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--color-text);
+  margin: 0;
+}
+
+/* Alternative picker */
+.conf-alts {
+  margin: 0 20px 16px;
+  animation: fade-in 0.3s ease 0.1s both;
+}
+.conf-alts-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  margin-bottom: 10px;
+}
+.conf-alts-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.conf-alt-btn {
+  padding: 10px 18px;
+  border-radius: 100px;
+  border: 2px solid var(--color-border);
+  background: white;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+  min-height: 48px;
+  cursor: pointer;
+  transition: all var(--t);
+}
+.conf-alt-btn.selected {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+  box-shadow: 0 3px 10px rgba(255,107,53,0.35);
+}
+.conf-alt-btn:active { transform: scale(0.95); }
 
 .add-form { padding: 0 20px; }
 
