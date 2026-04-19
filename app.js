@@ -126,7 +126,10 @@ function setProgress(set) {
 // ===== ROUTING =====
 function navigate(view) {
   APP.view = view;
-  document.querySelectorAll('.view').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.view').forEach(function(el) {
+    el.classList.remove('active');
+    el.style.display = ''; // clear any inline style set by renderSetup
+  });
   var el = document.getElementById('view-' + view);
   if (el) { el.classList.add('active'); window.scrollTo(0, 0); }
 
@@ -227,9 +230,38 @@ function renderHome() {
   var el = document.getElementById('view-home');
   var coll = getCollection();
   var total = coll.length;
+  var latest = coll[0] || null;
   var setsStarted = ROCK_SETS.filter(function(s) { return setProgress(s).found > 0; }).length;
   var recent = coll.slice(0, 3);
 
+  // Hero: full-bleed latest rock photo with stats overlaid
+  var heroHtml;
+  if (total === 0) {
+    heroHtml =
+      '<div class="hero-empty">' +
+        '<span class="hero-empty-icon">🪨</span>' +
+        '<div class="hero-empty-title">Start your collection!</div>' +
+        '<p class="hero-empty-sub">Tap the + button to photograph your first rock</p>' +
+      '</div>';
+  } else {
+    heroHtml =
+      '<div class="hero-section">' +
+        (latest && latest.photoDataUrl
+          ? '<img class="hero-photo" src="' + latest.photoDataUrl + '" alt="' + esc(latest.name) + '">'
+          : '<div class="hero-photo-placeholder">🪨</div>') +
+        '<div class="hero-overlay">' +
+          '<div class="hero-latest-label">Latest Find</div>' +
+          '<div class="hero-latest-name">' + esc(latest ? latest.name : '') + '</div>' +
+          '<div class="hero-stats-row">' +
+            '<div class="hero-stat"><span class="hero-stat-num">' + total + '</span><span class="hero-stat-lbl">Rocks 🪨</span></div>' +
+            '<div class="hero-stat-sep"></div>' +
+            '<div class="hero-stat"><span class="hero-stat-num">' + setsStarted + '</span><span class="hero-stat-lbl">Sets ⭐</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  // Recent finds row
   var recentHtml = '';
   if (recent.length > 0) {
     recentHtml =
@@ -248,6 +280,7 @@ function renderHome() {
       '</div>';
   }
 
+  // Set progress cards
   var setsHtml = ROCK_SETS.slice(0, 3).map(function(s) {
     var p = setProgress(s);
     return '<div class="set-mini-card">' +
@@ -261,22 +294,54 @@ function renderHome() {
   }).join('');
 
   el.innerHTML =
-    '<div class="page-header">' +
-      '<div class="page-title">My Collection 🪨</div>' +
-      '<div class="page-subtitle">' + (total === 0 ? 'Add your first rock to get started!' : total + ' rock' + (total !== 1 ? 's' : '') + ' and counting!') + '</div>' +
-    '</div>' +
-    '<div class="stats-row">' +
-      '<div class="stat-card"><div class="stat-number">' + total + '</div><div class="stat-label">Rocks Found 🪨</div></div>' +
-      '<div class="stat-card"><div class="stat-number">' + setsStarted + '</div><div class="stat-label">Sets Started ⭐</div></div>' +
-    '</div>' +
+    heroHtml +
     recentHtml +
     '<div class="home-section">' +
       '<div class="section-title">Set Progress ⭐</div>' +
       setsHtml +
     '</div>' +
-    (total === 0 ?
-      '<div class="empty-state"><span class="es-icon">📸</span><h3>No rocks yet!</h3><p>Tap the big orange + button below to photograph and identify your first rock!</p></div>'
-      : '');
+    '<div class="home-section">' +
+      '<button class="btn btn-ghost" id="import-btn" style="font-size:14px;min-height:44px">📥 Import starter-collection.json</button>' +
+      '<button class="btn btn-ghost mt-8" id="settings-home-btn" style="font-size:14px;min-height:44px">⚙️ Change API Key</button>' +
+    '</div>';
+
+  document.getElementById('import-btn').addEventListener('click', importCollection);
+  document.getElementById('settings-home-btn').addEventListener('click', function() { navigate('setup'); });
+}
+
+// ===== IMPORT COLLECTION =====
+async function importCollection() {
+  var btn = document.getElementById('import-btn');
+  if (btn) { btn.textContent = '⏳ Loading...'; btn.disabled = true; }
+
+  try {
+    var resp = await fetch('starter-collection.json?v=' + Date.now());
+    if (!resp.ok) throw new Error('starter-collection.json not found. Run seed-collection.py first.');
+    var rocks = await resp.json();
+    if (!Array.isArray(rocks) || rocks.length === 0) throw new Error('File is empty or invalid.');
+
+    var existing = getCollection();
+    var existingNames = new Set(existing.map(function(r) { return norm(r.name); }));
+
+    var added = 0;
+    rocks.forEach(function(r) {
+      if (!existingNames.has(norm(r.name))) {
+        existing.push(r);
+        added++;
+      }
+    });
+    saveCollection(existing);
+
+    celebrate(
+      added + ' rocks imported! 🪨',
+      rocks.length - added > 0 ? (rocks.length - added) + ' duplicates skipped.' : 'Your collection is ready!',
+      '🎉'
+    );
+    setTimeout(function() { navigate('collection'); }, 400);
+  } catch (err) {
+    alert('Import failed: ' + err.message);
+    if (btn) { btn.textContent = '📥 Import starter-collection.json'; btn.disabled = false; }
+  }
 }
 
 // ===== RENDER: ADD =====
